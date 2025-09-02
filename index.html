@@ -664,3 +664,260 @@
                                                     <div className="space-y-2 text-sm">
                                                         <div className="flex justify-between">
                                                             <span>Proportionele uitgaven:</span>
+                                                            <span>€{person1ProportionalShare.toFixed(2)}</span>
+                                                        </div>
+                                                        <div className="flex justify-between">
+                                                            <span>Fifty-fifty uitgaven:</span>
+                                                            <span>€{person1FixedShare.toFixed(2)}</span>
+                                                        </div>
+                                                        <hr className="my-2" />
+                                                        <div className="flex justify-between font-semibold text-lg">
+                                                            <span>Totaal te storten:</span>
+                                                            <span className="text-blue-600">€{person1Total.toFixed(2)}</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <div className="bg-white p-6 rounded-lg shadow-sm">
+                                                    <h3 className="font-semibold text-green-600 mb-3 text-lg">👨 Olivier</h3>
+                                                    <div className="space-y-2 text-sm">
+                                                        <div className="flex justify-between">
+                                                            <span>Proportionele uitgaven:</span>
+                                                            <span>€{person2ProportionalShare.toFixed(2)}</span>
+                                                        </div>
+                                                        <div className="flex justify-between">
+                                                            <span>Fifty-fifty uitgaven:</span>
+                                                            <span>€{person2FixedShare.toFixed(2)}</span>
+                                                        </div>
+                                                        <hr className="my-2" />
+                                                        <div className="flex justify-between font-semibold text-lg">
+                                                            <span>Totaal te storten:</span>
+                                                            <span className="text-green-600">€{person2Total.toFixed(2)}</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div className="mt-6 p-4 bg-white rounded-lg text-center">
+                                                <div className="text-sm text-gray-600 mb-2">Totale maandelijkse uitgaven</div>
+                                                <div className="text-2xl font-bold text-gray-800">
+                                                    €{(totalProportionalExpenses + totalFixedExpenses).toFixed(2)}
+                                                </div>
+                                                <div className="text-sm text-purple-600 font-medium mt-2">
+                                                    Potentiële besparingen: €{(totalIncome - (totalProportionalExpenses + totalFixedExpenses)).toFixed(2)}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div className="mb-8 p-6 bg-gray-100 rounded-lg text-center">
+                                            <h2 className="text-xl font-semibold text-gray-500 mb-4">Berekening</h2>
+                                            <div className="py-8">
+                                                <div className="text-6xl mb-4">🧮</div>
+                                                <div className="text-gray-500 mb-2">
+                                                    Vul eerst beide lonen in om de berekening te zien
+                                                </div>
+                                                <div className="text-sm text-gray-400">
+                                                    De verdeling wordt automatisch berekend zodra beide bedragen zijn ingevuld
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+                                </>
+                            ) : (
+                                <div className="space-y-8">
+                                    {/* Analysis Overview */}
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                                        <div className="bg-gradient-to-br from-blue-500 to-blue-600 p-6 rounded-xl text-white">
+                                            <div className="text-3xl mb-2">💰</div>
+                                            <div className="text-2xl font-bold">
+                                                €{analysisData.length > 0 ? (analysisData.reduce((sum, d) => sum + d.totalIncome, 0) / analysisData.length).toFixed(0) : '0'}
+                                            </div>
+                                            <div className="text-blue-100 text-sm">Gem. Maandinkomen</div>
+                                        </div>
+                                        
+                                        <div className="bg-gradient-to-br from-amber-500 to-amber-600 p-6 rounded-xl text-white">
+                                            <div className="text-3xl mb-2">🛒</div>
+                                            <div className="text-2xl font-bold">
+                                                €{analysisData.length > 0 ? (analysisData.reduce((sum, d) => sum + d.totalExpenses, 0) / analysisData.length).toFixed(0) : '0'}
+                                            </div>
+                                            <div className="text-amber-100 text-sm">Gem. Maanduitgaven</div>
+                                        </div>
+                                        
+                                        <div className="bg-gradient-to-br from-green-500 to-green-600 p-6 rounded-xl text-white">
+                                            <div className="text-3xl mb-2">💎</div>
+                                            <div className="text-2xl font-bold">
+                                                €{analysisData.length > 0 ? (analysisData.reduce((sum, d) => sum + d.savings, 0) / analysisData.length).toFixed(0) : '0'}
+                                            </div>
+                                            <div className="text-green-100 text-sm">Gem. Besparingen</div>
+                                        </div>
+                                        
+                                        <div className="bg-gradient-to-br from-purple-500 to-purple-600 p-6 rounded-xl text-white">
+                                            <div className="text-3xl mb-2">📊</div>
+                                            <div className="text-2xl font-bold">
+                                                {analysisData.length}
+                                            </div>
+                                            <div className="text-purple-100 text-sm">
+                                                {analysisData.length === 1 ? 'Maand' : 'Maanden'} Data
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Charts */}
+                                    {analysisData.length > 0 ? (
+                                        <div className="space-y-8">
+                                            {/* Income Trend */}
+                                            <div className="bg-white p-6 rounded-xl shadow-lg">
+                                                <h3 className="text-xl font-bold text-gray-800 mb-4">Inkomsten Ontwikkeling</h3>
+                                                <ResponsiveContainer width="100%" height={300}>
+                                                    <LineChart data={analysisData}>
+                                                        <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                                                        <XAxis dataKey="monthName" stroke="#666" />
+                                                        <YAxis stroke="#666" />
+                                                        <Tooltip 
+                                                            formatter={(value, name) => [`€${value.toFixed(2)}`, name]}
+                                                            labelStyle={{ color: '#333' }}
+                                                            contentStyle={{ backgroundColor: '#fff', border: '1px solid #ddd', borderRadius: '8px' }}
+                                                        />
+                                                        <Legend />
+                                                        <Line 
+                                                            type="monotone" 
+                                                            dataKey="sandrineIncome" 
+                                                            stroke={chartColors.sandrine} 
+                                                            strokeWidth={3}
+                                                            name="Sandrine" 
+                                                            dot={{ fill: chartColors.sandrine, strokeWidth: 2, r: 4 }}
+                                                        />
+                                                        <Line 
+                                                            type="monotone" 
+                                                            dataKey="olivierIncome" 
+                                                            stroke={chartColors.olivier} 
+                                                            strokeWidth={3}
+                                                            name="Olivier" 
+                                                            dot={{ fill: chartColors.olivier, strokeWidth: 2, r: 4 }}
+                                                        />
+                                                    </LineChart>
+                                                </ResponsiveContainer>
+                                            </div>
+
+                                            {/* Expenses vs Income */}
+                                            <div className="bg-white p-6 rounded-xl shadow-lg">
+                                                <h3 className="text-xl font-bold text-gray-800 mb-4">Inkomsten vs Uitgaven</h3>
+                                                <ResponsiveContainer width="100%" height={300}>
+                                                    <AreaChart data={analysisData}>
+                                                        <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                                                        <XAxis dataKey="monthName" stroke="#666" />
+                                                        <YAxis stroke="#666" />
+                                                        <Tooltip 
+                                                            formatter={(value, name) => [`€${value.toFixed(2)}`, name]}
+                                                            labelStyle={{ color: '#333' }}
+                                                            contentStyle={{ backgroundColor: '#fff', border: '1px solid #ddd', borderRadius: '8px' }}
+                                                        />
+                                                        <Legend />
+                                                        <Area 
+                                                            type="monotone" 
+                                                            dataKey="totalIncome" 
+                                                            stroke="#10B981" 
+                                                            fill="#10B981"
+                                                            fillOpacity={0.3}
+                                                            name="Totaal Inkomen"
+                                                        />
+                                                        <Area 
+                                                            type="monotone" 
+                                                            dataKey="totalExpenses" 
+                                                            stroke="#EF4444" 
+                                                            fill="#EF4444"
+                                                            fillOpacity={0.3}
+                                                            name="Totale Uitgaven"
+                                                        />
+                                                        <Line 
+                                                            type="monotone" 
+                                                            dataKey="savings" 
+                                                            stroke={chartColors.savings} 
+                                                            strokeWidth={3}
+                                                            name="Besparingen"
+                                                            dot={{ fill: chartColors.savings, strokeWidth: 2, r: 4 }}
+                                                        />
+                                                    </AreaChart>
+                                                </ResponsiveContainer>
+                                            </div>
+
+                                            {/* Monthly Overview Table */}
+                                            <div className="bg-white p-6 rounded-xl shadow-lg">
+                                                <h3 className="text-xl font-bold text-gray-800 mb-4">Maandelijks Overzicht</h3>
+                                                <div className="overflow-x-auto">
+                                                    <table className="w-full text-sm">
+                                                        <thead className="bg-gray-50">
+                                                            <tr>
+                                                                <th className="text-left p-3 font-semibold">Maand</th>
+                                                                <th className="text-right p-3 font-semibold">Sandrine</th>
+                                                                <th className="text-right p-3 font-semibold">Olivier</th>
+                                                                <th className="text-right p-3 font-semibold">Totaal</th>
+                                                                <th className="text-right p-3 font-semibold">Uitgaven</th>
+                                                                <th className="text-right p-3 font-semibold">Bespaard</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            {analysisData.slice().reverse().map((month, index) => (
+                                                                <tr key={month.monthKey} className={index % 2 === 0 ? 'bg-gray-50/50' : ''}>
+                                                                    <td className="p-3 font-medium">{month.fullMonth}</td>
+                                                                    <td className="p-3 text-right">€{month.sandrineIncome.toFixed(2)}</td>
+                                                                    <td className="p-3 text-right">€{month.olivierIncome.toFixed(2)}</td>
+                                                                    <td className="p-3 text-right font-semibold">€{month.totalIncome.toFixed(2)}</td>
+                                                                    <td className="p-3 text-right text-red-600">€{month.totalExpenses.toFixed(2)}</td>
+                                                                    <td className={`p-3 text-right font-semibold ${month.savings >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                                                        €{month.savings.toFixed(2)}
+                                                                    </td>
+                                                                </tr>
+                                                            ))}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div className="text-center py-16 bg-white rounded-xl shadow-lg">
+                                            <div className="text-6xl mb-4">📊</div>
+                                            <h3 className="text-2xl font-bold text-gray-600 mb-4">Nog geen data om te analyseren</h3>
+                                            <p className="text-gray-500 mb-8">
+                                                Voeg eerst inkomsten en uitgaven toe in de Budget tab om prachtige analyses te zien!
+                                            </p>
+                                            <button
+                                                onClick={() => setActiveTab('budget')}
+                                                className="px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+                                            >
+                                                Ga naar Budget
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Footer Info */}
+                        <div className="px-8 pb-6">
+                            <div className="bg-gradient-to-r from-gray-50 to-gray-100 p-4 rounded-lg">
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-gray-600">
+                                    <div>
+                                        <strong className="text-gray-800">Data Opslag:</strong>
+                                        <br />Lokaal in browser + Google Sheets backup
+                                    </div>
+                                    <div>
+                                        <strong className="text-gray-800">Auto-Sync:</strong>
+                                        <br />Wijzigingen worden automatisch opgeslagen
+                                    </div>
+                                    <div>
+                                        <strong className="text-gray-800">Toegankelijk:</strong>
+                                        <br />Werkt op alle apparaten, altijd beschikbaar
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        ReactDOM.render(<BudgetCalculator />, document.getElementById('root'));
+    </script>
+</body>
+</html>
