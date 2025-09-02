@@ -7,7 +7,7 @@
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/recharts/2.8.0/Recharts.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/recharts/2.5.0/Recharts.js"></script>
     <script src="https://apis.google.com/js/api.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
@@ -42,6 +42,22 @@
         .gradient-bg {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         }
+        
+        .error-banner {
+            background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
+            border: 1px solid #fecaca;
+            border-radius: 8px;
+            padding: 12px 16px;
+            margin-bottom: 16px;
+        }
+        
+        .success-banner {
+            background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+            border: 1px solid #bbf7d0;
+            border-radius: 8px;
+            padding: 12px 16px;
+            margin-bottom: 16px;
+        }
     </style>
 </head>
 <body>
@@ -55,18 +71,21 @@
     </div>
 
     <script type="text/babel">
-        const { useState, useEffect } = React;
+        const { useState, useEffect, useCallback } = React;
 
-        // Initialize Recharts components
+        // Initialize Recharts components safely
         let LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, 
             BarChart, Bar, PieChart, Cell, AreaChart, Area, Pie;
 
-        // Wait for Recharts to load
         const initializeRecharts = () => {
-            if (typeof Recharts !== 'undefined') {
-                ({ LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, 
-                   BarChart, Bar, PieChart, Cell, AreaChart, Area, Pie } = Recharts);
-                return true;
+            try {
+                if (typeof Recharts !== 'undefined' && Recharts.LineChart) {
+                    ({ LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, 
+                       BarChart, Bar, PieChart, Cell, AreaChart, Area, Pie } = Recharts);
+                    return true;
+                }
+            } catch (error) {
+                console.warn('Recharts initialization failed:', error);
             }
             return false;
         };
@@ -88,70 +107,96 @@
             const [isGoogleAuthorized, setIsGoogleAuthorized] = useState(false);
             const [googleApiLoaded, setGoogleApiLoaded] = useState(false);
             const [rechartsLoaded, setRechartsLoaded] = useState(false);
+            const [syncError, setSyncError] = useState(null);
+            const [isSyncing, setIsSyncing] = useState(false);
 
-            // Initialize libraries
+            // Initialize libraries with better error handling
             useEffect(() => {
                 const initLibraries = async () => {
-                    // Initialize Recharts
-                    const checkRecharts = () => {
+                    console.log('Starting library initialization...');
+                    
+                    // Initialize Recharts with retries
+                    let rechartAttempts = 0;
+                    const maxRechartAttempts = 5;
+                    const rechartInterval = setInterval(() => {
                         if (initializeRecharts()) {
                             setRechartsLoaded(true);
-                            return true;
-                        }
-                        return false;
-                    };
-
-                    // Try multiple times to load Recharts
-                    let attempts = 0;
-                    const maxAttempts = 10;
-                    const rechartInterval = setInterval(() => {
-                        if (checkRecharts() || attempts >= maxAttempts) {
                             clearInterval(rechartInterval);
+                            console.log('Recharts loaded successfully');
+                        } else if (rechartAttempts >= maxRechartAttempts) {
+                            clearInterval(rechartInterval);
+                            console.warn('Recharts failed to load after max attempts');
                         }
-                        attempts++;
-                    }, 500);
+                        rechartAttempts++;
+                    }, 1000);
 
-                    // Initialize Google API
+                    // Initialize Google API with better error handling
                     try {
-                        if (typeof gapi !== 'undefined') {
-                            await new Promise((resolve, reject) => {
-                                gapi.load('auth2', {
-                                    callback: resolve,
-                                    onerror: reject
-                                });
-                            });
-                            
-                            await new Promise((resolve, reject) => {
-                                gapi.load('client', {
-                                    callback: resolve,
-                                    onerror: reject
-                                });
-                            });
-                
-                            await gapi.client.init({
-                                apiKey: GOOGLE_CONFIG.API_KEY,
-                                clientId: GOOGLE_CONFIG.CLIENT_ID,
-                                discoveryDocs: [GOOGLE_CONFIG.DISCOVERY_DOC],
-                                scope: GOOGLE_CONFIG.SCOPES
-                            });
-                
-                            setGoogleApiLoaded(true);
-                
-                            const authInstance = gapi.auth2.getAuthInstance();
-                            if (authInstance && authInstance.isSignedIn.get()) {
-                                setIsGoogleAuthorized(true);
-                                await loadFromGoogleSheets();
-                            }
+                        if (typeof gapi === 'undefined') {
+                            throw new Error('Google API script not loaded');
                         }
+
+                        console.log('Loading Google API modules...');
+                        
+                        // Load auth2 module
+                        await new Promise((resolve, reject) => {
+                            gapi.load('auth2', {
+                                callback: () => {
+                                    console.log('auth2 module loaded');
+                                    resolve();
+                                },
+                                onerror: (error) => {
+                                    console.error('Failed to load auth2:', error);
+                                    reject(new Error('Failed to load auth2 module'));
+                                }
+                            });
+                        });
+                        
+                        // Load client module
+                        await new Promise((resolve, reject) => {
+                            gapi.load('client', {
+                                callback: () => {
+                                    console.log('client module loaded');
+                                    resolve();
+                                },
+                                onerror: (error) => {
+                                    console.error('Failed to load client:', error);
+                                    reject(new Error('Failed to load client module'));
+                                }
+                            });
+                        });
+            
+                        console.log('Initializing Google API client...');
+                        await gapi.client.init({
+                            apiKey: GOOGLE_CONFIG.API_KEY,
+                            clientId: GOOGLE_CONFIG.CLIENT_ID,
+                            discoveryDocs: [GOOGLE_CONFIG.DISCOVERY_DOC],
+                            scope: GOOGLE_CONFIG.SCOPES
+                        });
+            
+                        console.log('Google API initialized successfully');
+                        setGoogleApiLoaded(true);
+                        setSyncError(null);
+            
+                        // Check if already signed in
+                        const authInstance = gapi.auth2.getAuthInstance();
+                        if (authInstance && authInstance.isSignedIn.get()) {
+                            console.log('User already signed in');
+                            setIsGoogleAuthorized(true);
+                            await loadFromGoogleSheets();
+                        }
+                        
                     } catch (error) {
-                        console.log('Google API unavailable or initialization failed:', error.message);
+                        console.error('Google API initialization failed:', error);
                         setGoogleApiLoaded(false);
+                        setSyncError(`Google API Error: ${error.message}`);
                     }
 
                     setIsLoading(false);
                 };
 
-                initLibraries();
+                // Add a small delay to ensure all scripts are loaded
+                setTimeout(initLibraries, 1000);
             }, []);
             
             // Current selected month/year
@@ -173,8 +218,14 @@
 
             // Network status monitoring
             useEffect(() => {
-                const handleOnline = () => setIsOnline(true);
-                const handleOffline = () => setIsOnline(false);
+                const handleOnline = () => {
+                    setIsOnline(true);
+                    setSyncError(null);
+                };
+                const handleOffline = () => {
+                    setIsOnline(false);
+                    setSyncError('Offline - changes will sync when connection is restored');
+                };
                 
                 window.addEventListener('online', handleOnline);
                 window.addEventListener('offline', handleOffline);
@@ -185,19 +236,19 @@
                 };
             }, []);
 
-            // Auto-sync to Google Sheets when data changes
+            // Auto-sync to Google Sheets when data changes - with debouncing
             useEffect(() => {
-                if (isGoogleAuthorized && Object.keys(monthlyData).length > 0) {
+                if (isGoogleAuthorized && Object.keys(monthlyData).length > 0 && isOnline) {
                     const timeoutId = setTimeout(() => {
                         saveToGoogleSheets();
-                    }, 2000); // Auto-save after 2 seconds of no changes
+                    }, 3000); // Increased delay to avoid rapid saves
 
                     return () => clearTimeout(timeoutId);
                 }
-            }, [monthlyData, isGoogleAuthorized]);
+            }, [monthlyData, isGoogleAuthorized, isOnline]);
 
             // Parse sheet data helper function
-            const parseSheetData = (rows) => {
+            const parseSheetData = useCallback((rows) => {
                 if (!rows || rows.length <= 1) return {};
                 
                 const data = {};
@@ -243,13 +294,20 @@
                 }
                 
                 return data;
-            };
+            }, []);
 
             // Load data from Google Sheets
-            const loadFromGoogleSheets = async () => {
-                if (!isGoogleAuthorized || !gapi.client.sheets) return;
-    
+            const loadFromGoogleSheets = useCallback(async () => {
+                if (!isGoogleAuthorized || !gapi.client.sheets) {
+                    console.log('Cannot load from Google Sheets: not authorized or client not ready');
+                    return;
+                }
+
                 try {
+                    console.log('Loading data from Google Sheets...');
+                    setIsSyncing(true);
+                    setSyncError(null);
+                    
                     const response = await gapi.client.sheets.spreadsheets.values.get({
                         spreadsheetId: GOOGLE_CONFIG.SPREADSHEET_ID,
                         range: `${GOOGLE_CONFIG.SHEET_NAME}!A:H`
@@ -259,24 +317,39 @@
                         const sheetData = parseSheetData(response.result.values);
                         setMonthlyData(sheetData);
                         setLastSync(new Date().toISOString());
+                        console.log('Data loaded successfully from Google Sheets');
+                    } else {
+                        console.log('No data found in Google Sheets');
                     }
                 } catch (error) {
-                    console.log('Failed to load from Google Sheets:', error.message);
+                    console.error('Failed to load from Google Sheets:', error);
+                    setSyncError(`Failed to load data: ${error.message}`);
+                } finally {
+                    setIsSyncing(false);
                 }
-            };
+            }, [isGoogleAuthorized, parseSheetData]);
 
             // Save data to Google Sheets
-            const saveToGoogleSheets = async () => {
-                if (!isGoogleAuthorized || !gapi.client.sheets) return;
-    
+            const saveToGoogleSheets = useCallback(async () => {
+                if (!isGoogleAuthorized || !gapi.client.sheets || !isOnline) {
+                    console.log('Cannot save to Google Sheets: not authorized, client not ready, or offline');
+                    return;
+                }
+
                 try {
+                    console.log('Saving data to Google Sheets...');
+                    setIsSyncing(true);
+                    setSyncError(null);
+                    
                     const values = convertToSheetFormat();
         
+                    // Clear existing data
                     await gapi.client.sheets.spreadsheets.values.clear({
                         spreadsheetId: GOOGLE_CONFIG.SPREADSHEET_ID,
                         range: GOOGLE_CONFIG.SHEET_NAME
                     });
 
+                    // Insert new data
                     await gapi.client.sheets.spreadsheets.values.update({
                         spreadsheetId: GOOGLE_CONFIG.SPREADSHEET_ID,
                         range: `${GOOGLE_CONFIG.SHEET_NAME}!A1`,
@@ -285,24 +358,45 @@
                     });
 
                     setLastSync(new Date().toISOString());
+                    console.log('Data saved successfully to Google Sheets');
                 } catch (error) {
-                    console.log('Failed to save to Google Sheets:', error.message);
+                    console.error('Failed to save to Google Sheets:', error);
+                    setSyncError(`Failed to save data: ${error.message}`);
+                } finally {
+                    setIsSyncing(false);
                 }
-            };
+            }, [isGoogleAuthorized, isOnline, monthlyData]);
 
-            const signInToGoogle = async () => {
+            const signInToGoogle = useCallback(async () => {
                 try {
+                    console.log('Attempting Google sign-in...');
+                    setSyncError(null);
                     const authInstance = gapi.auth2.getAuthInstance();
                     await authInstance.signIn();
                     setIsGoogleAuthorized(true);
+                    console.log('Google sign-in successful');
                     await loadFromGoogleSheets();
                 } catch (error) {
-                    console.log('Google sign-in failed:', error.message);
+                    console.error('Google sign-in failed:', error);
+                    setSyncError(`Sign-in failed: ${error.message}`);
                 }
-            };
+            }, [loadFromGoogleSheets]);
+
+            const signOutFromGoogle = useCallback(async () => {
+                try {
+                    const authInstance = gapi.auth2.getAuthInstance();
+                    await authInstance.signOut();
+                    setIsGoogleAuthorized(false);
+                    setLastSync(null);
+                    setSyncError(null);
+                    console.log('Google sign-out successful');
+                } catch (error) {
+                    console.error('Google sign-out failed:', error);
+                }
+            }, []);
 
             // Convert our data format to sheet format
-            const convertToSheetFormat = () => {
+            const convertToSheetFormat = useCallback(() => {
                 const sheetData = [
                     ['Maand', 'Jaar', 'Sandrine Inkomen', 'Olivier Inkomen', 'Uitgave Naam', 'Uitgave Bedrag', 'Uitgave Type', 'Update Tijd']
                 ];
@@ -331,14 +425,14 @@
                 });
 
                 return sheetData;
-            };
+            }, [monthlyData]);
 
             // Utility functions
-            const getCurrentMonthKey = () => {
+            const getCurrentMonthKey = useCallback(() => {
                 return `${selectedDate.year}-${selectedDate.month.toString().padStart(2, '0')}`;
-            };
+            }, [selectedDate]);
 
-            const getCurrentMonthData = () => {
+            const getCurrentMonthData = useCallback(() => {
                 const monthKey = getCurrentMonthKey();
                 return monthlyData[monthKey] || {
                     incomes: {
@@ -347,9 +441,9 @@
                     },
                     expenses: []
                 };
-            };
+            }, [monthlyData, getCurrentMonthKey]);
 
-            const updateCurrentMonthData = (updates) => {
+            const updateCurrentMonthData = useCallback((updates) => {
                 const monthKey = getCurrentMonthKey();
                 setMonthlyData(prev => ({
                     ...prev,
@@ -358,9 +452,9 @@
                         ...updates
                     }
                 }));
-            };
+            }, [getCurrentMonthKey, getCurrentMonthData]);
 
-            const navigateMonth = (direction) => {
+            const navigateMonth = useCallback((direction) => {
                 setSelectedDate(prev => {
                     let newMonth = prev.month + direction;
                     let newYear = prev.year;
@@ -375,44 +469,47 @@
                     
                     return { month: newMonth, year: newYear };
                 });
-            };
+            }, []);
 
-            const getMonthName = (monthIndex) => {
+            const getMonthName = useCallback((monthIndex) => {
                 const months = [
                     'Januari', 'Februari', 'Maart', 'April', 'Mei', 'Juni',
                     'Juli', 'Augustus', 'September', 'Oktober', 'November', 'December'
                 ];
                 return months[monthIndex];
-            };
+            }, []);
 
-            const getMonthIndex = (monthName) => {
+            const getMonthIndex = useCallback((monthName) => {
                 const months = [
                     'Januari', 'Februari', 'Maart', 'April', 'Mei', 'Juni',
                     'Juli', 'Augustus', 'September', 'Oktober', 'November', 'December'
                 ];
                 return months.indexOf(monthName);
-            };
+            }, []);
 
-            const updateIncome = (person, amount) => {
+            const updateIncome = useCallback((person, amount) => {
+                const currentData = getCurrentMonthData();
                 const newIncomes = {
                     ...currentData.incomes,
                     [person]: { ...currentData.incomes[person], amount: parseFloat(amount) || 0 }
                 };
                 updateCurrentMonthData({ incomes: newIncomes });
-            };
+            }, [getCurrentMonthData, updateCurrentMonthData]);
 
-            const addExpense = () => {
+            const addExpense = useCallback(() => {
                 if (newExpense.name && newExpense.amount > 0) {
+                    const currentData = getCurrentMonthData();
                     const newExpenses = [...currentData.expenses, { ...newExpense, id: Date.now() }];
                     updateCurrentMonthData({ expenses: newExpenses });
                     setNewExpense({ name: '', amount: 0, proportional: true });
                 }
-            };
+            }, [newExpense, getCurrentMonthData, updateCurrentMonthData]);
 
-            const deleteExpense = (id) => {
+            const deleteExpense = useCallback((id) => {
+                const currentData = getCurrentMonthData();
                 const newExpenses = currentData.expenses.filter(exp => exp.id !== id);
                 updateCurrentMonthData({ expenses: newExpenses });
-            };
+            }, [getCurrentMonthData, updateCurrentMonthData]);
 
             const currentData = getCurrentMonthData();
             const incomes = currentData.incomes;
@@ -438,7 +535,7 @@
             const person2Total = person2ProportionalShare + person2FixedShare;
 
             // Analysis data
-            const getAnalysisData = () => {
+            const getAnalysisData = useCallback(() => {
                 return Object.entries(monthlyData)
                     .sort(([a], [b]) => a.localeCompare(b))
                     .map(([monthKey, data]) => {
@@ -461,7 +558,7 @@
                             olivierRatio: totalIncome > 0 ? (data.incomes.person2.amount / totalIncome) * 100 : 50
                         };
                     });
-            };
+            }, [monthlyData, getMonthName]);
 
             const analysisData = getAnalysisData();
             const chartColors = {
@@ -502,24 +599,36 @@
                                         {isOnline ? 'Online' : 'Offline'}
                                     </div>
                                     
-                                    {lastSync && (
+                                    {isSyncing && (
+                                        <div className="flex items-center gap-2 px-3 py-1 rounded-full text-sm bg-blue-500/20 text-blue-100">
+                                            <div className="w-2 h-2 rounded-full bg-blue-400 animate-pulse"></div>
+                                            Syncing...
+                                        </div>
+                                    )}
+                                    
+                                    {lastSync && !isSyncing && (
                                         <div className="text-xs text-indigo-200">
                                             Laatste sync: {new Date(lastSync).toLocaleString('nl-NL')}
                                         </div>
                                     )}
 
-                                    {!isGoogleAuthorized && googleApiLoaded && (
+                                    {isGoogleAuthorized ? (
+                                        <button
+                                            onClick={signOutFromGoogle}
+                                            className="px-3 py-1 bg-red-600/80 text-white rounded text-xs hover:bg-red-600 transition-colors"
+                                        >
+                                            Disconnect Google
+                                        </button>
+                                    ) : googleApiLoaded ? (
                                         <button
                                             onClick={signInToGoogle}
                                             className="px-3 py-1 bg-green-600/80 text-white rounded text-xs hover:bg-green-600 transition-colors"
                                         >
                                             Connect Google Sheets
                                         </button>
-                                    )}
-
-                                    {!googleApiLoaded && (
+                                    ) : (
                                         <div className="text-xs text-indigo-200">
-                                            Google Sheets: Niet beschikbaar
+                                            Google Sheets: Loading...
                                         </div>
                                     )}
                                 </div>
@@ -551,6 +660,31 @@
                         </div>
 
                         <div className="p-8">
+                            {/* Error/Success Messages */}
+                            {syncError && (
+                                <div className="error-banner">
+                                    <div className="flex items-center gap-2">
+                                        <div className="text-red-600 text-xl">⚠️</div>
+                                        <div>
+                                            <div className="font-medium text-red-800">Sync probleem</div>
+                                            <div className="text-sm text-red-600">{syncError}</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {isGoogleAuthorized && !syncError && lastSync && (
+                                <div className="success-banner">
+                                    <div className="flex items-center gap-2">
+                                        <div className="text-green-600 text-xl">✅</div>
+                                        <div>
+                                            <div className="font-medium text-green-800">Google Sheets verbonden</div>
+                                            <div className="text-sm text-green-600">Data wordt automatisch gesynchroniseerd</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
                             {activeTab === 'budget' ? (
                                 <>
                                     {/* Month Navigation */}
@@ -820,6 +954,28 @@
                                             </div>
                                         </div>
                                     </div>
+
+                                    {/* Manual Sync Button */}
+                                    {isGoogleAuthorized && (
+                                        <div className="flex justify-center">
+                                            <button
+                                                onClick={saveToGoogleSheets}
+                                                disabled={isSyncing || !isOnline}
+                                                className="flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                            >
+                                                {isSyncing ? (
+                                                    <>
+                                                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                                        Synchroniseren...
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        🔄 Handmatig synchroniseren
+                                                    </>
+                                                )}
+                                            </button>
+                                        </div>
+                                    )}
 
                                     {/* Charts */}
                                     {analysisData.length > 0 && rechartsLoaded ? (
