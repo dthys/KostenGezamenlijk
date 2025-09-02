@@ -7,7 +7,7 @@
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <script src="https://unpkg.com/recharts@2.12.7/umd/Recharts.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/recharts/2.8.0/Recharts.js"></script>
     <script src="https://apis.google.com/js/api.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
@@ -55,17 +55,21 @@
     </div>
 
     <script type="text/babel">
-        const { 
-            LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, 
-            BarChart, Bar, PieChart, Cell, AreaChart, Area, Pie 
-        } = (() => {
-            if (typeof Recharts !== 'undefined') return Recharts;
-            if (typeof window !== 'undefined' && window.Recharts) return window.Recharts;
-            console.error('Recharts library not loaded');
-            return {};
-        })();
-
         const { useState, useEffect } = React;
+
+        // Initialize Recharts components
+        let LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, 
+            BarChart, Bar, PieChart, Cell, AreaChart, Area, Pie;
+
+        // Wait for Recharts to load
+        const initializeRecharts = () => {
+            if (typeof Recharts !== 'undefined') {
+                ({ LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, 
+                   BarChart, Bar, PieChart, Cell, AreaChart, Area, Pie } = Recharts);
+                return true;
+            }
+            return false;
+        };
 
         const GOOGLE_CONFIG = {
             API_KEY: 'AIzaSyAYL-9uaenj449Uxv6dCXqA-5Mrazgft-w',
@@ -83,14 +87,46 @@
             const [lastSync, setLastSync] = useState(null);
             const [isGoogleAuthorized, setIsGoogleAuthorized] = useState(false);
             const [googleApiLoaded, setGoogleApiLoaded] = useState(false);
+            const [rechartsLoaded, setRechartsLoaded] = useState(false);
 
-            // Initialize Google API
+            // Initialize libraries
             useEffect(() => {
-                const initializeGapi = async () => {
+                const initLibraries = async () => {
+                    // Initialize Recharts
+                    const checkRecharts = () => {
+                        if (initializeRecharts()) {
+                            setRechartsLoaded(true);
+                            return true;
+                        }
+                        return false;
+                    };
+
+                    // Try multiple times to load Recharts
+                    let attempts = 0;
+                    const maxAttempts = 10;
+                    const rechartInterval = setInterval(() => {
+                        if (checkRecharts() || attempts >= maxAttempts) {
+                            clearInterval(rechartInterval);
+                        }
+                        attempts++;
+                    }, 500);
+
+                    // Initialize Google API
                     try {
                         if (typeof gapi !== 'undefined') {
-                            await new Promise(resolve => gapi.load('auth2', resolve));
-                            await new Promise(resolve => gapi.load('client', resolve));
+                            await new Promise((resolve, reject) => {
+                                gapi.load('auth2', {
+                                    callback: resolve,
+                                    onerror: reject
+                                });
+                            });
+                            
+                            await new Promise((resolve, reject) => {
+                                gapi.load('client', {
+                                    callback: resolve,
+                                    onerror: reject
+                                });
+                            });
                 
                             await gapi.client.init({
                                 apiKey: GOOGLE_CONFIG.API_KEY,
@@ -108,11 +144,14 @@
                             }
                         }
                     } catch (error) {
-                        console.error('Google API initialization failed:', error);
+                        console.log('Google API unavailable or initialization failed:', error.message);
                         setGoogleApiLoaded(false);
                     }
+
+                    setIsLoading(false);
                 };
-                initializeGapi();
+
+                initLibraries();
             }, []);
             
             // Current selected month/year
@@ -124,7 +163,7 @@
                 };
             });
 
-            // All data stored per month - using in-memory storage instead of localStorage
+            // All data stored per month - using in-memory storage
             const [monthlyData, setMonthlyData] = useState({});
             const [newExpense, setNewExpense] = useState({
                 name: '',
@@ -146,34 +185,22 @@
                 };
             }, []);
 
-            // Auto-load data on component mount
+            // Auto-sync to Google Sheets when data changes
             useEffect(() => {
-                loadDataFromSources();
-            }, []);
+                if (isGoogleAuthorized && Object.keys(monthlyData).length > 0) {
+                    const timeoutId = setTimeout(() => {
+                        saveToGoogleSheets();
+                    }, 2000); // Auto-save after 2 seconds of no changes
 
-            // Load data from sources (removed localStorage dependency)
-            const loadDataFromSources = async () => {
-                try {
-                    // Initialize with empty data
-                    setMonthlyData({});
-
-                    // Try to load from Google Sheets if available
-                    if (isOnline && GOOGLE_CONFIG.CLIENT_ID !== 'YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com') {
-                        await loadFromGoogleSheets();
-                    }
-                } catch (error) {
-                    console.error('Error loading data:', error);
-                } finally {
-                    setIsLoading(false);
+                    return () => clearTimeout(timeoutId);
                 }
-            };
+            }, [monthlyData, isGoogleAuthorized]);
 
             // Parse sheet data helper function
             const parseSheetData = (rows) => {
                 if (!rows || rows.length <= 1) return {};
                 
                 const data = {};
-                const headers = rows[0];
                 
                 for (let i = 1; i < rows.length; i++) {
                     const row = rows[i];
@@ -203,12 +230,15 @@
                     }
                     
                     if (expenseName && expenseAmount > 0) {
-                        data[monthKey].expenses.push({
-                            id: Date.now() + Math.random(),
-                            name: expenseName,
-                            amount: expenseAmount,
-                            proportional: expenseType === 'Proportioneel'
-                        });
+                        const existingExpense = data[monthKey].expenses.find(e => e.name === expenseName);
+                        if (!existingExpense) {
+                            data[monthKey].expenses.push({
+                                id: Date.now() + Math.random(),
+                                name: expenseName,
+                                amount: expenseAmount,
+                                proportional: expenseType === 'Proportioneel'
+                            });
+                        }
                     }
                 }
                 
@@ -231,7 +261,7 @@
                         setLastSync(new Date().toISOString());
                     }
                 } catch (error) {
-                    console.error('Failed to load from Google Sheets:', error);
+                    console.log('Failed to load from Google Sheets:', error.message);
                 }
             };
 
@@ -256,7 +286,7 @@
 
                     setLastSync(new Date().toISOString());
                 } catch (error) {
-                    console.error('Failed to save to Google Sheets:', error);
+                    console.log('Failed to save to Google Sheets:', error.message);
                 }
             };
 
@@ -267,7 +297,7 @@
                     setIsGoogleAuthorized(true);
                     await loadFromGoogleSheets();
                 } catch (error) {
-                    console.error('Google sign-in failed:', error);
+                    console.log('Google sign-in failed:', error.message);
                 }
             };
 
@@ -486,6 +516,12 @@
                                             Connect Google Sheets
                                         </button>
                                     )}
+
+                                    {!googleApiLoaded && (
+                                        <div className="text-xs text-indigo-200">
+                                            Google Sheets: Niet beschikbaar
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                             
@@ -499,7 +535,7 @@
                                             : 'text-white hover:bg-white/20'
                                     }`}
                                 >
-                                    📅 Budget
+                                    Budget
                                 </button>
                                 <button
                                     onClick={() => setActiveTab('analysis')}
@@ -509,7 +545,7 @@
                                             : 'text-white hover:bg-white/20'
                                     }`}
                                 >
-                                    📊 Analyse
+                                    Analyse
                                 </button>
                             </div>
                         </div>
@@ -639,7 +675,7 @@
                                             onClick={addExpense}
                                             className="mt-4 flex items-center gap-2 px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-colors"
                                         >
-                                            ➕ Uitgave Toevoegen
+                                            + Uitgave Toevoegen
                                         </button>
                                     </div>
 
@@ -650,7 +686,7 @@
                                         </h2>
                                         {expenses.length === 0 ? (
                                             <div className="text-center py-8 text-gray-500 bg-gray-50 rounded-lg">
-                                                📝 Nog geen uitgaven toegevoegd voor deze maand
+                                                Nog geen uitgaven toegevoegd voor deze maand
                                             </div>
                                         ) : (
                                             <div className="space-y-3">
@@ -667,7 +703,7 @@
                                                                 onClick={() => deleteExpense(expense.id)}
                                                                 className="p-2 text-red-600 hover:bg-red-100 rounded transition-colors"
                                                             >
-                                                                🗑️
+                                                                Verwijder
                                                             </button>
                                                         </div>
                                                     </div>
@@ -679,11 +715,11 @@
                                     {/* Results Section */}
                                     {bothIncomesEntered ? (
                                         <div className="mb-8 p-6 bg-blue-50 rounded-lg">
-                                            <h2 className="text-xl font-semibold text-gray-700 mb-4">💰 Berekening</h2>
+                                            <h2 className="text-xl font-semibold text-gray-700 mb-4">Berekening</h2>
                                             
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                                 <div className="bg-white p-6 rounded-lg shadow-sm">
-                                                    <h3 className="font-semibold text-blue-600 mb-3 text-lg">👩 Sandrine</h3>
+                                                    <h3 className="font-semibold text-blue-600 mb-3 text-lg">Sandrine</h3>
                                                     <div className="space-y-2 text-sm">
                                                         <div className="flex justify-between">
                                                             <span>Proportionele uitgaven:</span>
@@ -702,7 +738,7 @@
                                                 </div>
 
                                                 <div className="bg-white p-6 rounded-lg shadow-sm">
-                                                    <h3 className="font-semibold text-green-600 mb-3 text-lg">👨 Olivier</h3>
+                                                    <h3 className="font-semibold text-green-600 mb-3 text-lg">Olivier</h3>
                                                     <div className="space-y-2 text-sm">
                                                         <div className="flex justify-between">
                                                             <span>Proportionele uitgaven:</span>
@@ -785,17 +821,8 @@
                                         </div>
                                     </div>
 
-                                    {!isGoogleAuthorized && googleApiLoaded && (
-    <button
-        onClick={signInToGoogle}
-        className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm"
-    >
-        📊 Verbind met Google Sheets
-    </button>
-)}
-
                                     {/* Charts */}
-                                    {analysisData.length > 0 ? (
+                                    {analysisData.length > 0 && rechartsLoaded ? (
                                         <div className="space-y-8">
                                             {/* Income Trend */}
                                             <div className="bg-white p-6 rounded-xl shadow-lg">
@@ -906,6 +933,43 @@
                                                 </div>
                                             </div>
                                         </div>
+                                    ) : analysisData.length > 0 && !rechartsLoaded ? (
+                                        <div className="bg-white p-6 rounded-xl shadow-lg text-center">
+                                            <div className="text-4xl mb-4">📊</div>
+                                            <h3 className="text-xl font-bold text-gray-600 mb-4">Grafieken laden...</h3>
+                                            <p className="text-gray-500 mb-4">
+                                                De bibliotheek voor grafieken wordt nog geladen. Probeer het over een paar seconden opnieuw.
+                                            </p>
+                                            
+                                            {/* Fallback: Simple Table */}
+                                            <div className="mt-8">
+                                                <h4 className="text-lg font-semibold mb-4">Maandelijkse Data</h4>
+                                                <div className="overflow-x-auto">
+                                                    <table className="w-full text-sm">
+                                                        <thead className="bg-gray-50">
+                                                            <tr>
+                                                                <th className="text-left p-3 font-semibold">Maand</th>
+                                                                <th className="text-right p-3 font-semibold">Totaal Inkomen</th>
+                                                                <th className="text-right p-3 font-semibold">Uitgaven</th>
+                                                                <th className="text-right p-3 font-semibold">Besparingen</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            {analysisData.slice().reverse().map((month, index) => (
+                                                                <tr key={month.monthKey} className={index % 2 === 0 ? 'bg-gray-50/50' : ''}>
+                                                                    <td className="p-3 font-medium">{month.fullMonth}</td>
+                                                                    <td className="p-3 text-right font-semibold">€{month.totalIncome.toFixed(2)}</td>
+                                                                    <td className="p-3 text-right text-red-600">€{month.totalExpenses.toFixed(2)}</td>
+                                                                    <td className={`p-3 text-right font-semibold ${month.savings >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                                                        €{month.savings.toFixed(2)}
+                                                                    </td>
+                                                                </tr>
+                                                            ))}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            </div>
+                                        </div>
                                     ) : (
                                         <div className="text-center py-16 bg-white rounded-xl shadow-lg">
                                             <div className="text-6xl mb-4">📊</div>
@@ -931,15 +995,17 @@
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-gray-600">
                                     <div>
                                         <strong className="text-gray-800">Data Opslag:</strong>
-                                        <br />Lokaal in browser + Google Sheets backup
+                                        <br />In browser sessie + Google Sheets backup
                                     </div>
                                     <div>
                                         <strong className="text-gray-800">Auto-Sync:</strong>
-                                        <br />Wijzigingen worden automatisch opgeslagen
+                                        <br />Wijzigingen worden automatisch opgeslagen naar Google Sheets
                                     </div>
                                     <div>
-                                        <strong className="text-gray-800">Toegankelijk:</strong>
-                                        <br />Werkt op alle apparaten, altijd beschikbaar
+                                        <strong className="text-gray-800">Status:</strong>
+                                        <br />
+                                        {rechartsLoaded ? 'Alle functies beschikbaar' : 'Grafieken laden nog...'}
+                                        {googleApiLoaded ? ' | Google Sheets OK' : ' | Google Sheets niet beschikbaar'}
                                     </div>
                                 </div>
                             </div>
