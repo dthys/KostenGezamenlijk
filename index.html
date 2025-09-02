@@ -292,8 +292,18 @@
 
             // Load data from Google Sheets
             const loadFromGoogleSheets = useCallback(async () => {
-                if (!isGoogleAuthorized || !gapi.client.sheets) {
-                    console.log('Cannot load from Google Sheets: not authorized or client not ready');
+                console.log('loadFromGoogleSheets called');
+                console.log('isGoogleAuthorized:', isGoogleAuthorized);
+                console.log('gapi.client.sheets:', !!gapi.client.sheets);
+                console.log('Current token:', gapi.client.getToken());
+                
+                if (!gapi.client.sheets) {
+                    console.log('Cannot load from Google Sheets: client not ready');
+                    return;
+                }
+                
+                if (!gapi.client.getToken()) {
+                    console.log('Cannot load from Google Sheets: no token available');
                     return;
                 }
 
