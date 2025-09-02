@@ -7,7 +7,9 @@
     <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <script src="https://unpkg.com/recharts@2.8.0/umd/Recharts.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/recharts@2.8.0/umd/Recharts.js"></script>
+    <link rel="icon" href="data:,">
+
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body {
@@ -57,7 +59,7 @@
         const { 
             LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, 
             BarChart, Bar, PieChart, Cell, AreaChart, Area, Pie 
-        } = Recharts;
+        } = window.Recharts || Recharts;
 
         const { useState, useEffect } = React;
 
