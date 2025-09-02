@@ -7,8 +7,9 @@
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/recharts/2.1.9/Recharts.js"></script>
+
     <script src="https://apis.google.com/js/api.js"></script>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body {
@@ -73,11 +74,23 @@
     <script type="text/babel">
         const { useState, useEffect, useCallback } = React;
 
-        // Initialize Recharts components safely
+        const GOOGLE_CONFIG = {
+            API_KEY: 'AIzaSyAYL-9uaenj449Uxv6dCXqA-5Mrazgft-w',
+            CLIENT_ID: '429034127132-ouf1as1bgr9qug0odj9bt97j1vjnnp1v.apps.googleusercontent.com',
+            DISCOVERY_DOC: 'https://sheets.googleapis.com/$discovery/rest?version=v4',
+            SCOPES: 'https://www.googleapis.com/auth/spreadsheets',
+            SPREADSHEET_ID: '13V8sTjTH2kYJ6KGWQioRKKuVfrKe05PF9qBXkJOWnFo',
+            SHEET_NAME: 'BudgetData'
+        }; = React;
+
+        // Initialize Recharts components - DISABLED FOR NOW due to loading issues
         let LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, 
             BarChart, Bar, PieChart, Cell, AreaChart, Area, Pie;
 
         const initializeRecharts = () => {
+            // Temporarily disabled due to oneOfType error
+            return false;
+            /*
             try {
                 if (typeof Recharts !== 'undefined' && Recharts.LineChart) {
                     ({ LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, 
@@ -88,6 +101,7 @@
                 console.warn('Recharts initialization failed:', error);
             }
             return false;
+            */
         };
 
         const GOOGLE_CONFIG = {
@@ -106,7 +120,7 @@
             const [lastSync, setLastSync] = useState(null);
             const [isGoogleAuthorized, setIsGoogleAuthorized] = useState(false);
             const [googleApiLoaded, setGoogleApiLoaded] = useState(false);
-            const [rechartsLoaded, setRechartsLoaded] = useState(false);
+            const [googleTokenClient, setGoogleTokenClient] = useState(null);
             const [syncError, setSyncError] = useState(null);
             const [isSyncing, setIsSyncing] = useState(false);
 
@@ -115,42 +129,13 @@
                 const initLibraries = async () => {
                     console.log('Starting library initialization...');
                     
-                    // Initialize Recharts with retries
-                    let rechartAttempts = 0;
-                    const maxRechartAttempts = 5;
-                    const rechartInterval = setInterval(() => {
-                        if (initializeRecharts()) {
-                            setRechartsLoaded(true);
-                            clearInterval(rechartInterval);
-                            console.log('Recharts loaded successfully');
-                        } else if (rechartAttempts >= maxRechartAttempts) {
-                            clearInterval(rechartInterval);
-                            console.warn('Recharts failed to load after max attempts');
-                        }
-                        rechartAttempts++;
-                    }, 1000);
-
-                    // Initialize Google API with better error handling
+                    // Initialize Google API with new Google Identity Services
                     try {
                         if (typeof gapi === 'undefined') {
                             throw new Error('Google API script not loaded');
                         }
 
-                        console.log('Loading Google API modules...');
-                        
-                        // Load auth2 module
-                        await new Promise((resolve, reject) => {
-                            gapi.load('auth2', {
-                                callback: () => {
-                                    console.log('auth2 module loaded');
-                                    resolve();
-                                },
-                                onerror: (error) => {
-                                    console.error('Failed to load auth2:', error);
-                                    reject(new Error('Failed to load auth2 module'));
-                                }
-                            });
-                        });
+                        console.log('Loading Google API client...');
                         
                         // Load client module
                         await new Promise((resolve, reject) => {
@@ -169,21 +154,35 @@
                         console.log('Initializing Google API client...');
                         await gapi.client.init({
                             apiKey: GOOGLE_CONFIG.API_KEY,
-                            clientId: GOOGLE_CONFIG.CLIENT_ID,
                             discoveryDocs: [GOOGLE_CONFIG.DISCOVERY_DOC],
-                            scope: GOOGLE_CONFIG.SCOPES
                         });
             
-                        console.log('Google API initialized successfully');
+                        console.log('Google API client initialized successfully');
                         setGoogleApiLoaded(true);
                         setSyncError(null);
-            
-                        // Check if already signed in
-                        const authInstance = gapi.auth2.getAuthInstance();
-                        if (authInstance && authInstance.isSignedIn.get()) {
-                            console.log('User already signed in');
-                            setIsGoogleAuthorized(true);
-                            await loadFromGoogleSheets();
+
+                        // Initialize Google Identity Services (new auth method)
+                        if (typeof google !== 'undefined' && google.accounts) {
+                            console.log('Initializing Google Identity Services...');
+                            const tokenClient = google.accounts.oauth2.initTokenClient({
+                                client_id: GOOGLE_CONFIG.CLIENT_ID,
+                                scope: GOOGLE_CONFIG.SCOPES,
+                                callback: (response) => {
+                                    console.log('OAuth token received:', response);
+                                    if (response.access_token) {
+                                        setIsGoogleAuthorized(true);
+                                        loadFromGoogleSheets();
+                                    }
+                                },
+                                error_callback: (error) => {
+                                    console.error('OAuth error:', error);
+                                    setSyncError(`Authentication error: ${error.type || error.message}`);
+                                }
+                            });
+                            setGoogleTokenClient(tokenClient);
+                            console.log('Google Identity Services initialized');
+                        } else {
+                            throw new Error('Google Identity Services not available');
                         }
                         
                     } catch (error) {
@@ -371,27 +370,35 @@
                 try {
                     console.log('Attempting Google sign-in...');
                     setSyncError(null);
-                    const authInstance = gapi.auth2.getAuthInstance();
-                    await authInstance.signIn();
-                    setIsGoogleAuthorized(true);
-                    console.log('Google sign-in successful');
-                    await loadFromGoogleSheets();
+                    
+                    if (googleTokenClient) {
+                        googleTokenClient.requestAccessToken();
+                    } else {
+                        throw new Error('Google token client not initialized');
+                    }
                 } catch (error) {
                     console.error('Google sign-in failed:', error);
                     setSyncError(`Sign-in failed: ${error.message}`);
                 }
-            }, [loadFromGoogleSheets]);
+            }, [googleTokenClient]);
 
             const signOutFromGoogle = useCallback(async () => {
                 try {
-                    const authInstance = gapi.auth2.getAuthInstance();
-                    await authInstance.signOut();
+                    if (google.accounts.oauth2) {
+                        google.accounts.oauth2.revoke(gapi.client.getToken().access_token, () => {
+                            console.log('Token revoked');
+                        });
+                    }
+                    gapi.client.setToken(null);
                     setIsGoogleAuthorized(false);
                     setLastSync(null);
                     setSyncError(null);
                     console.log('Google sign-out successful');
                 } catch (error) {
                     console.error('Google sign-out failed:', error);
+                    // Force reset anyway
+                    setIsGoogleAuthorized(false);
+                    setLastSync(null);
                 }
             }, []);
 
@@ -1160,8 +1167,7 @@
                                     <div>
                                         <strong className="text-gray-800">Status:</strong>
                                         <br />
-                                        {rechartsLoaded ? 'Alle functies beschikbaar' : 'Grafieken laden nog...'}
-                                        {googleApiLoaded ? ' | Google Sheets OK' : ' | Google Sheets niet beschikbaar'}
+                                        {googleApiLoaded ? 'Google Sheets API OK' : 'Google Sheets API Loading...'}
                                     </div>
                                 </div>
                             </div>
