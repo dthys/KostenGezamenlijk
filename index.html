@@ -159,12 +159,16 @@
                                 client_id: GOOGLE_CONFIG.CLIENT_ID,
                                 scope: GOOGLE_CONFIG.SCOPES,
                                 callback: (response) => {
-                                    console.log('OAuth token received:', response);
-                                    if (response.access_token) {
-                                        setIsGoogleAuthorized(true);
-                                        loadFromGoogleSheets();
-                                    }
-                                },
+                                console.log('OAuth token received:', response);
+                                if (response.access_token) {
+                                    // Set the access token in the Google API client
+                                    gapi.client.setToken({
+                                        access_token: response.access_token
+                                    });
+                                    setIsGoogleAuthorized(true);
+                                    loadFromGoogleSheets();
+                                }
+                            },
                                 error_callback: (error) => {
                                     console.error('OAuth error:', error);
                                     setSyncError(`Authentication error: ${error.type || error.message}`);
