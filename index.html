@@ -760,21 +760,22 @@
                             {activeTab === 'budget' ? (
                                 <>
                                     {/* Month Navigation */}
-                                    <div className="mb-8 p-6 bg-indigo-50 rounded-lg">
-                                        <div className="flex items-center justify-between">
+                                    <div className="mb-8 p-4 sm:p-6 bg-indigo-50 rounded-lg">
+                                        <div className="flex items-center justify-between gap-2">
                                             <button
                                                 onClick={() => navigateMonth(-1)}
-                                                className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+                                                className="flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm sm:text-base flex-shrink-0"
                                             >
-                                                ← Vorige
+                                                <span className="hidden xs:inline">← Vorige</span>
+                                                <span className="xs:hidden">←</span>
                                             </button>
                                             
-                                            <div className="text-center">
-                                                <h2 className="text-2xl font-bold text-gray-800">
+                                            <div className="text-center flex-1 min-w-0 px-2">
+                                                <h2 className="text-lg sm:text-2xl font-bold text-gray-800 truncate">
                                                     {getMonthName(selectedDate.month)} {selectedDate.year}
                                                 </h2>
                                                 {Object.keys(monthlyData).includes(getCurrentMonthKey()) && (
-                                                    <div className="text-sm text-green-600 font-medium mt-1">
+                                                    <div className="text-xs sm:text-sm text-green-600 font-medium mt-1">
                                                         ✓ Data opgeslagen
                                                     </div>
                                                 )}
@@ -782,9 +783,10 @@
                                             
                                             <button
                                                 onClick={() => navigateMonth(1)}
-                                                className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+                                                className="flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm sm:text-base flex-shrink-0"
                                             >
-                                                Volgende →
+                                                <span className="hidden xs:inline">Volgende →</span>
+                                                <span className="xs:hidden">→</span>
                                             </button>
                                         </div>
                                     </div>
