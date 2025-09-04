@@ -92,6 +92,7 @@
 
         function BudgetCalculator() {
             const [activeTab, setActiveTab] = useState('budget');
+            const [analysisTab, setAnalysisTab] = useState('together');
             const [isLoading, setIsLoading] = useState(true);
             const [isOnline, setIsOnline] = useState(navigator.onLine);
             const [lastSync, setLastSync] = useState(null);
@@ -102,7 +103,7 @@
             const [isSyncing, setIsSyncing] = useState(false);
             const [copiedFromPrevious, setCopiedFromPrevious] = useState(false);
 
-            // Initialize libraries with better error handling
+            // Initialize libraries
             useEffect(() => {
                 const initLibraries = async () => {
                     console.log('Starting library initialization...');
@@ -212,17 +213,6 @@
                 };
             }, []);
 
-            // Auto-sync to Google Sheets when data changes
-            useEffect(() => {
-                if (isGoogleAuthorized && Object.keys(monthlyData).length > 0 && isOnline) {
-                    const timeoutId = setTimeout(() => {
-                        saveToGoogleSheets();
-                    }, 3000);
-
-                    return () => clearTimeout(timeoutId);
-                }
-            }, [monthlyData, isGoogleAuthorized, isOnline]);
-
             // Parse sheet data helper function
             const parseSheetData = useCallback((rows) => {
                 if (!rows || rows.length <= 1) return {};
@@ -311,78 +301,7 @@
                 } finally {
                     setIsSyncing(false);
                 }
-            }, [isGoogleAuthorized, parseSheetData]);
-
-            // Save data to Google Sheets
-            const saveToGoogleSheets = useCallback(async () => {
-                if (!isGoogleAuthorized || !gapi.client.sheets || !isOnline) {
-                    console.log('Cannot save to Google Sheets: not authorized, client not ready, or offline');
-                    return;
-                }
-
-                try {
-                    console.log('Saving data to Google Sheets...');
-                    setIsSyncing(true);
-                    setSyncError(null);
-                    
-                    const values = convertToSheetFormat();
-        
-                    await gapi.client.sheets.spreadsheets.values.clear({
-                        spreadsheetId: GOOGLE_CONFIG.SPREADSHEET_ID,
-                        range: GOOGLE_CONFIG.SHEET_NAME
-                    });
-
-                    await gapi.client.sheets.spreadsheets.values.update({
-                        spreadsheetId: GOOGLE_CONFIG.SPREADSHEET_ID,
-                        range: `${GOOGLE_CONFIG.SHEET_NAME}!A1`,
-                        valueInputOption: 'RAW',
-                        resource: { values }
-                    });
-
-                    setLastSync(new Date().toISOString());
-                    console.log('Data saved successfully to Google Sheets');
-                } catch (error) {
-                    console.error('Failed to save to Google Sheets:', error);
-                    setSyncError(`Failed to save data: ${error.message}`);
-                } finally {
-                    setIsSyncing(false);
-                }
-            }, [isGoogleAuthorized, isOnline, monthlyData]);
-
-            const signInToGoogle = useCallback(async () => {
-                try {
-                    console.log('Attempting Google sign-in...');
-                    setSyncError(null);
-                    
-                    if (googleTokenClient) {
-                        googleTokenClient.requestAccessToken();
-                    } else {
-                        throw new Error('Google token client not initialized');
-                    }
-                } catch (error) {
-                    console.error('Google sign-in failed:', error);
-                    setSyncError(`Sign-in failed: ${error.message}`);
-                }
-            }, [googleTokenClient]);
-
-            const signOutFromGoogle = useCallback(async () => {
-                try {
-                    if (google.accounts.oauth2 && gapi.client.getToken()) {
-                        google.accounts.oauth2.revoke(gapi.client.getToken().access_token, () => {
-                            console.log('Token revoked');
-                        });
-                    }
-                    gapi.client.setToken(null);
-                    setIsGoogleAuthorized(false);
-                    setLastSync(null);
-                    setSyncError(null);
-                    console.log('Google sign-out successful');
-                } catch (error) {
-                    console.error('Google sign-out failed:', error);
-                    setIsGoogleAuthorized(false);
-                    setLastSync(null);
-                }
-            }, []);
+            }, [parseSheetData]);
 
             // Convert our data format to sheet format
             const convertToSheetFormat = useCallback(() => {
@@ -421,6 +340,88 @@
 
                 return sheetData;
             }, [monthlyData]);
+
+            // Save data to Google Sheets
+            const saveToGoogleSheets = useCallback(async () => {
+                if (!isGoogleAuthorized || !gapi.client.sheets || !isOnline) {
+                    console.log('Cannot save to Google Sheets: not authorized, client not ready, or offline');
+                    return;
+                }
+
+                try {
+                    console.log('Saving data to Google Sheets...');
+                    setIsSyncing(true);
+                    setSyncError(null);
+                    
+                    const values = convertToSheetFormat();
+        
+                    await gapi.client.sheets.spreadsheets.values.clear({
+                        spreadsheetId: GOOGLE_CONFIG.SPREADSHEET_ID,
+                        range: GOOGLE_CONFIG.SHEET_NAME
+                    });
+
+                    await gapi.client.sheets.spreadsheets.values.update({
+                        spreadsheetId: GOOGLE_CONFIG.SPREADSHEET_ID,
+                        range: `${GOOGLE_CONFIG.SHEET_NAME}!A1`,
+                        valueInputOption: 'RAW',
+                        resource: { values }
+                    });
+
+                    setLastSync(new Date().toISOString());
+                    console.log('Data saved successfully to Google Sheets');
+                } catch (error) {
+                    console.error('Failed to save to Google Sheets:', error);
+                    setSyncError(`Failed to save data: ${error.message}`);
+                } finally {
+                    setIsSyncing(false);
+                }
+            }, [isGoogleAuthorized, isOnline, convertToSheetFormat]);
+
+            // Auto-sync to Google Sheets when data changes
+            useEffect(() => {
+                if (isGoogleAuthorized && Object.keys(monthlyData).length > 0 && isOnline) {
+                    const timeoutId = setTimeout(() => {
+                        saveToGoogleSheets();
+                    }, 3000);
+
+                    return () => clearTimeout(timeoutId);
+                }
+            }, [monthlyData, isGoogleAuthorized, isOnline, saveToGoogleSheets]);
+
+            const signInToGoogle = useCallback(async () => {
+                try {
+                    console.log('Attempting Google sign-in...');
+                    setSyncError(null);
+                    
+                    if (googleTokenClient) {
+                        googleTokenClient.requestAccessToken();
+                    } else {
+                        throw new Error('Google token client not initialized');
+                    }
+                } catch (error) {
+                    console.error('Google sign-in failed:', error);
+                    setSyncError(`Sign-in failed: ${error.message}`);
+                }
+            }, [googleTokenClient]);
+
+            const signOutFromGoogle = useCallback(async () => {
+                try {
+                    if (google.accounts.oauth2 && gapi.client.getToken()) {
+                        google.accounts.oauth2.revoke(gapi.client.getToken().access_token, () => {
+                            console.log('Token revoked');
+                        });
+                    }
+                    gapi.client.setToken(null);
+                    setIsGoogleAuthorized(false);
+                    setLastSync(null);
+                    setSyncError(null);
+                    console.log('Google sign-out successful');
+                } catch (error) {
+                    console.error('Google sign-out failed:', error);
+                    setIsGoogleAuthorized(false);
+                    setLastSync(null);
+                }
+            }, []);
 
             // Utility functions
             const getCurrentMonthKey = useCallback(() => {
@@ -461,7 +462,7 @@
                 }));
             }, [getCurrentMonthKey, getCurrentMonthData]);
 
-            // Copy expenses from previous month if current month has no expenses
+            // Copy expenses from previous month
             const copyExpensesFromPreviousMonth = useCallback(() => {
                 const currentMonthKey = getCurrentMonthKey();
                 const previousMonthKey = getPreviousMonthKey();
@@ -469,26 +470,24 @@
                 const currentMonthData = monthlyData[currentMonthKey];
                 const previousMonthData = monthlyData[previousMonthKey];
                 
-                // Only copy if current month has no expenses and previous month has expenses
                 if ((!currentMonthData || currentMonthData.expenses.length === 0) && 
                     previousMonthData && previousMonthData.expenses.length > 0) {
                     
                     const copiedExpenses = previousMonthData.expenses.map(expense => ({
                         ...expense,
-                        id: Date.now() + Math.random() // Generate new IDs
+                        id: Date.now() + Math.random()
                     }));
                     
-                    const currentData = getCurrentMonthData();
                     updateCurrentMonthData({
                         expenses: copiedExpenses
                     });
                     
                     setCopiedFromPrevious(true);
-                    setTimeout(() => setCopiedFromPrevious(false), 5000); // Hide message after 5 seconds
+                    setTimeout(() => setCopiedFromPrevious(false), 5000);
                     
                     console.log(`Copied ${copiedExpenses.length} expenses from previous month`);
                 }
-            }, [getCurrentMonthKey, getPreviousMonthKey, monthlyData, getCurrentMonthData, updateCurrentMonthData]);
+            }, [getCurrentMonthKey, getPreviousMonthKey, monthlyData, updateCurrentMonthData]);
 
             // Auto-copy expenses when month changes or data is loaded
             useEffect(() => {
@@ -593,6 +592,17 @@
                         const totalIncome = data.incomes.person1.amount + data.incomes.person2.amount;
                         const totalExpenses = data.expenses.reduce((sum, exp) => sum + exp.amount, 0);
                         
+                        const proportionalExpenses = data.expenses.filter(e => e.type === 'proportional').reduce((sum, e) => sum + e.amount, 0);
+                        const fiftyFiftyExpenses = data.expenses.filter(e => e.type === 'fifty-fifty').reduce((sum, e) => sum + e.amount, 0);
+                        const sandrineOnlyExpenses = data.expenses.filter(e => e.type === 'sandrine').reduce((sum, e) => sum + e.amount, 0);
+                        const olivierOnlyExpenses = data.expenses.filter(e => e.type === 'olivier').reduce((sum, e) => sum + e.amount, 0);
+                        
+                        const sandrineRatio = totalIncome > 0 ? data.incomes.person1.amount / totalIncome : 0.5;
+                        const olivierRatio = totalIncome > 0 ? data.incomes.person2.amount / totalIncome : 0.5;
+                        
+                        const sandrineExpenses = (proportionalExpenses * sandrineRatio) + (fiftyFiftyExpenses / 2) + sandrineOnlyExpenses;
+                        const olivierExpenses = (proportionalExpenses * olivierRatio) + (fiftyFiftyExpenses / 2) + olivierOnlyExpenses;
+                        
                         return {
                             monthKey,
                             monthName: `${monthName.slice(0, 3)} ${year}`,
@@ -602,8 +612,12 @@
                             totalIncome,
                             totalExpenses,
                             savings: totalIncome - totalExpenses,
-                            sandrineRatio: totalIncome > 0 ? (data.incomes.person1.amount / totalIncome) * 100 : 50,
-                            olivierRatio: totalIncome > 0 ? (data.incomes.person2.amount / totalIncome) * 100 : 50
+                            sandrineRatio: sandrineRatio * 100,
+                            olivierRatio: olivierRatio * 100,
+                            sandrineExpenses,
+                            olivierExpenses,
+                            sandrineSavings: data.incomes.person1.amount - sandrineExpenses,
+                            olivierSavings: data.incomes.person2.amount - olivierExpenses
                         };
                     });
             }, [monthlyData, getMonthName]);
@@ -1039,41 +1053,261 @@
                                 </>
                             ) : (
                                 <div className="space-y-8">
-                                    {/* Analysis Overview */}
-                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                                        <div className="bg-gradient-to-br from-blue-500 to-blue-600 p-6 rounded-xl text-white">
-                                            <div className="text-3xl mb-2">💰</div>
-                                            <div className="text-2xl font-bold">
-                                                €{analysisData.length > 0 ? (analysisData.reduce((sum, d) => sum + d.totalIncome, 0) / analysisData.length).toFixed(0) : '0'}
-                                            </div>
-                                            <div className="text-blue-100 text-sm">Gem. Maandinkomen</div>
+                                    {/* Analysis Sub-tabs */}
+                                    <div className="bg-gray-50 p-6 rounded-xl">
+                                        <div className="flex justify-center space-x-1 bg-white rounded-lg p-1 mb-6">
+                                            <button
+                                                onClick={() => setAnalysisTab('together')}
+                                                className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all duration-300 ${
+                                                    analysisTab === 'together' 
+                                                        ? 'bg-indigo-600 text-white shadow-lg' 
+                                                        : 'text-gray-600 hover:bg-gray-100'
+                                                }`}
+                                            >
+                                                💑 Samen
+                                            </button>
+                                            <button
+                                                onClick={() => setAnalysisTab('sandrine')}
+                                                className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all duration-300 ${
+                                                    analysisTab === 'sandrine' 
+                                                        ? 'bg-blue-600 text-white shadow-lg' 
+                                                        : 'text-gray-600 hover:bg-gray-100'
+                                                }`}
+                                            >
+                                                👩‍💼 Sandrine
+                                            </button>
+                                            <button
+                                                onClick={() => setAnalysisTab('olivier')}
+                                                className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all duration-300 ${
+                                                    analysisTab === 'olivier' 
+                                                        ? 'bg-green-600 text-white shadow-lg' 
+                                                        : 'text-gray-600 hover:bg-gray-100'
+                                                }`}
+                                            >
+                                                👨‍💼 Olivier
+                                            </button>
                                         </div>
-                                        
-                                        <div className="bg-gradient-to-br from-amber-500 to-amber-600 p-6 rounded-xl text-white">
-                                            <div className="text-3xl mb-2">🛒</div>
-                                            <div className="text-2xl font-bold">
-                                                €{analysisData.length > 0 ? (analysisData.reduce((sum, d) => sum + d.totalExpenses, 0) / analysisData.length).toFixed(0) : '0'}
+
+                                        {/* Analysis Content */}
+                                        {analysisTab === 'together' && (
+                                            <div className="space-y-6">
+                                                {/* Together Overview */}
+                                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                                                    <div className="bg-gradient-to-br from-purple-500 to-purple-600 p-6 rounded-xl text-white">
+                                                        <div className="text-3xl mb-2">💰</div>
+                                                        <div className="text-2xl font-bold">
+                                                            €{analysisData.length > 0 ? (analysisData.reduce((sum, d) => sum + d.totalIncome, 0) / analysisData.length).toFixed(0) : '0'}
+                                                        </div>
+                                                        <div className="text-purple-100 text-sm">Gem. Maandinkomen</div>
+                                                    </div>
+                                                    
+                                                    <div className="bg-gradient-to-br from-amber-500 to-amber-600 p-6 rounded-xl text-white">
+                                                        <div className="text-3xl mb-2">🛒</div>
+                                                        <div className="text-2xl font-bold">
+                                                            €{analysisData.length > 0 ? (analysisData.reduce((sum, d) => sum + d.totalExpenses, 0) / analysisData.length).toFixed(0) : '0'}
+                                                        </div>
+                                                        <div className="text-amber-100 text-sm">Gem. Maanduitgaven</div>
+                                                    </div>
+                                                    
+                                                    <div className="bg-gradient-to-br from-green-500 to-green-600 p-6 rounded-xl text-white">
+                                                        <div className="text-3xl mb-2">💎</div>
+                                                        <div className="text-2xl font-bold">
+                                                            €{analysisData.length > 0 ? (analysisData.reduce((sum, d) => sum + d.savings, 0) / analysisData.length).toFixed(0) : '0'}
+                                                        </div>
+                                                        <div className="text-green-100 text-sm">Gem. Besparingen</div>
+                                                    </div>
+                                                    
+                                                    <div className="bg-gradient-to-br from-blue-500 to-blue-600 p-6 rounded-xl text-white">
+                                                        <div className="text-3xl mb-2">📊</div>
+                                                        <div className="text-2xl font-bold">
+                                                            {analysisData.length}
+                                                        </div>
+                                                        <div className="text-blue-100 text-sm">
+                                                            {analysisData.length === 1 ? 'Maand' : 'Maanden'} Data
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                {/* Together Data Table */}
+                                                {analysisData.length > 0 ? (
+                                                    <div className="bg-white p-6 rounded-xl shadow-lg">
+                                                        <h4 className="text-lg font-semibold mb-4">Samen - Maandelijkse Data</h4>
+                                                        <div className="overflow-x-auto">
+                                                            <table className="w-full text-sm">
+                                                                <thead className="bg-gray-50">
+                                                                    <tr>
+                                                                        <th className="text-left p-3 font-semibold">Maand</th>
+                                                                        <th className="text-right p-3 font-semibold">Totaal Inkomen</th>
+                                                                        <th className="text-right p-3 font-semibold">Totale Uitgaven</th>
+                                                                        <th className="text-right p-3 font-semibold">Besparingen</th>
+                                                                        <th className="text-right p-3 font-semibold">Spaarpercentage</th>
+                                                                    </tr>
+                                                                </thead>
+                                                                <tbody>
+                                                                    {analysisData.slice().reverse().map((month, index) => (
+                                                                        <tr key={month.monthKey} className={index % 2 === 0 ? 'bg-gray-50/50' : ''}>
+                                                                            <td className="p-3 font-medium">{month.fullMonth}</td>
+                                                                            <td className="p-3 text-right">€{month.totalIncome.toFixed(2)}</td>
+                                                                            <td className="p-3 text-right text-red-600">€{month.totalExpenses.toFixed(2)}</td>
+                                                                            <td className={`p-3 text-right font-semibold ${month.savings >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                                                                €{month.savings.toFixed(2)}
+                                                                            </td>
+                                                                            <td className={`p-3 text-right ${(month.savings / month.totalIncome * 100) >= 10 ? 'text-green-600' : 'text-amber-600'}`}>
+                                                                                {month.totalIncome > 0 ? (month.savings / month.totalIncome * 100).toFixed(1) : '0'}%
+                                                                            </td>
+                                                                        </tr>
+                                                                    ))}
+                                                                </tbody>
+                                                            </table>
+                                                        </div>
+                                                    </div>
+                                                ) : null}
                                             </div>
-                                            <div className="text-amber-100 text-sm">Gem. Maanduitgaven</div>
-                                        </div>
-                                        
-                                        <div className="bg-gradient-to-br from-green-500 to-green-600 p-6 rounded-xl text-white">
-                                            <div className="text-3xl mb-2">💎</div>
-                                            <div className="text-2xl font-bold">
-                                                €{analysisData.length > 0 ? (analysisData.reduce((sum, d) => sum + d.savings, 0) / analysisData.length).toFixed(0) : '0'}
+                                        )}
+
+                                        {analysisTab === 'sandrine' && (
+                                            <div className="space-y-6">
+                                                {/* Sandrine Overview */}
+                                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                                                    <div className="bg-gradient-to-br from-blue-500 to-blue-600 p-6 rounded-xl text-white">
+                                                        <div className="text-3xl mb-2">💰</div>
+                                                        <div className="text-2xl font-bold">
+                                                            €{analysisData.length > 0 ? (analysisData.reduce((sum, d) => sum + d.sandrineIncome, 0) / analysisData.length).toFixed(0) : '0'}
+                                                        </div>
+                                                        <div className="text-blue-100 text-sm">Gem. Maandinkomen</div>
+                                                    </div>
+                                                    
+                                                    <div className="bg-gradient-to-br from-pink-500 to-pink-600 p-6 rounded-xl text-white">
+                                                        <div className="text-3xl mb-2">💳</div>
+                                                        <div className="text-2xl font-bold">
+                                                            €{analysisData.length > 0 ? (analysisData.reduce((sum, d) => sum + d.sandrineExpenses, 0) / analysisData.length).toFixed(0) : '0'}
+                                                        </div>
+                                                        <div className="text-pink-100 text-sm">Gem. Maanduitgaven</div>
+                                                    </div>
+                                                    
+                                                    <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 p-6 rounded-xl text-white">
+                                                        <div className="text-3xl mb-2">💎</div>
+                                                        <div className="text-2xl font-bold">
+                                                            €{analysisData.length > 0 ? (analysisData.reduce((sum, d) => sum + d.sandrineSavings, 0) / analysisData.length).toFixed(0) : '0'}
+                                                        </div>
+                                                        <div className="text-emerald-100 text-sm">Gem. Besparingen</div>
+                                                    </div>
+                                                    
+                                                    <div className="bg-gradient-to-br from-indigo-500 to-indigo-600 p-6 rounded-xl text-white">
+                                                        <div className="text-3xl mb-2">📊</div>
+                                                        <div className="text-2xl font-bold">
+                                                            {analysisData.length > 0 ? (analysisData.reduce((sum, d) => sum + d.sandrineRatio, 0) / analysisData.length).toFixed(1) : '0'}%
+                                                        </div>
+                                                        <div className="text-indigo-100 text-sm">Gem. Inkomensaandeel</div>
+                                                    </div>
+                                                </div>
+
+                                                {/* Sandrine Data Table */}
+                                                {analysisData.length > 0 ? (
+                                                    <div className="bg-white p-6 rounded-xl shadow-lg">
+                                                        <h4 className="text-lg font-semibold mb-4">Sandrine - Maandelijkse Data</h4>
+                                                        <div className="overflow-x-auto">
+                                                            <table className="w-full text-sm">
+                                                                <thead className="bg-gray-50">
+                                                                    <tr>
+                                                                        <th className="text-left p-3 font-semibold">Maand</th>
+                                                                        <th className="text-right p-3 font-semibold">Inkomen</th>
+                                                                        <th className="text-right p-3 font-semibold">Uitgaven</th>
+                                                                        <th className="text-right p-3 font-semibold">Besparingen</th>
+                                                                        <th className="text-right p-3 font-semibold">Aandeel</th>
+                                                                    </tr>
+                                                                </thead>
+                                                                <tbody>
+                                                                    {analysisData.slice().reverse().map((month, index) => (
+                                                                        <tr key={month.monthKey} className={index % 2 === 0 ? 'bg-gray-50/50' : ''}>
+                                                                            <td className="p-3 font-medium">{month.fullMonth}</td>
+                                                                            <td className="p-3 text-right">€{month.sandrineIncome.toFixed(2)}</td>
+                                                                            <td className="p-3 text-right text-red-600">€{month.sandrineExpenses.toFixed(2)}</td>
+                                                                            <td className={`p-3 text-right font-semibold ${month.sandrineSavings >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                                                                €{month.sandrineSavings.toFixed(2)}
+                                                                            </td>
+                                                                            <td className="p-3 text-right">{month.sandrineRatio.toFixed(1)}%</td>
+                                                                        </tr>
+                                                                    ))}
+                                                                </tbody>
+                                                            </table>
+                                                        </div>
+                                                    </div>
+                                                ) : null}
                                             </div>
-                                            <div className="text-green-100 text-sm">Gem. Besparingen</div>
-                                        </div>
-                                        
-                                        <div className="bg-gradient-to-br from-purple-500 to-purple-600 p-6 rounded-xl text-white">
-                                            <div className="text-3xl mb-2">📊</div>
-                                            <div className="text-2xl font-bold">
-                                                {analysisData.length}
+                                        )}
+
+                                        {analysisTab === 'olivier' && (
+                                            <div className="space-y-6">
+                                                {/* Olivier Overview */}
+                                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                                                    <div className="bg-gradient-to-br from-green-500 to-green-600 p-6 rounded-xl text-white">
+                                                        <div className="text-3xl mb-2">💰</div>
+                                                        <div className="text-2xl font-bold">
+                                                            €{analysisData.length > 0 ? (analysisData.reduce((sum, d) => sum + d.olivierIncome, 0) / analysisData.length).toFixed(0) : '0'}
+                                                        </div>
+                                                        <div className="text-green-100 text-sm">Gem. Maandinkomen</div>
+                                                    </div>
+                                                    
+                                                    <div className="bg-gradient-to-br from-orange-500 to-orange-600 p-6 rounded-xl text-white">
+                                                        <div className="text-3xl mb-2">💳</div>
+                                                        <div className="text-2xl font-bold">
+                                                            €{analysisData.length > 0 ? (analysisData.reduce((sum, d) => sum + d.olivierExpenses, 0) / analysisData.length).toFixed(0) : '0'}
+                                                        </div>
+                                                        <div className="text-orange-100 text-sm">Gem. Maanduitgaven</div>
+                                                    </div>
+                                                    
+                                                    <div className="bg-gradient-to-br from-teal-500 to-teal-600 p-6 rounded-xl text-white">
+                                                        <div className="text-3xl mb-2">💎</div>
+                                                        <div className="text-2xl font-bold">
+                                                            €{analysisData.length > 0 ? (analysisData.reduce((sum, d) => sum + d.olivierSavings, 0) / analysisData.length).toFixed(0) : '0'}
+                                                        </div>
+                                                        <div className="text-teal-100 text-sm">Gem. Besparingen</div>
+                                                    </div>
+                                                    
+                                                    <div className="bg-gradient-to-br from-cyan-500 to-cyan-600 p-6 rounded-xl text-white">
+                                                        <div className="text-3xl mb-2">📊</div>
+                                                        <div className="text-2xl font-bold">
+                                                            {analysisData.length > 0 ? (analysisData.reduce((sum, d) => sum + d.olivierRatio, 0) / analysisData.length).toFixed(1) : '0'}%
+                                                        </div>
+                                                        <div className="text-cyan-100 text-sm">Gem. Inkomensaandeel</div>
+                                                    </div>
+                                                </div>
+
+                                                {/* Olivier Data Table */}
+                                                {analysisData.length > 0 ? (
+                                                    <div className="bg-white p-6 rounded-xl shadow-lg">
+                                                        <h4 className="text-lg font-semibold mb-4">Olivier - Maandelijkse Data</h4>
+                                                        <div className="overflow-x-auto">
+                                                            <table className="w-full text-sm">
+                                                                <thead className="bg-gray-50">
+                                                                    <tr>
+                                                                        <th className="text-left p-3 font-semibold">Maand</th>
+                                                                        <th className="text-right p-3 font-semibold">Inkomen</th>
+                                                                        <th className="text-right p-3 font-semibold">Uitgaven</th>
+                                                                        <th className="text-right p-3 font-semibold">Besparingen</th>
+                                                                        <th className="text-right p-3 font-semibold">Aandeel</th>
+                                                                    </tr>
+                                                                </thead>
+                                                                <tbody>
+                                                                    {analysisData.slice().reverse().map((month, index) => (
+                                                                        <tr key={month.monthKey} className={index % 2 === 0 ? 'bg-gray-50/50' : ''}>
+                                                                            <td className="p-3 font-medium">{month.fullMonth}</td>
+                                                                            <td className="p-3 text-right">€{month.olivierIncome.toFixed(2)}</td>
+                                                                            <td className="p-3 text-right text-red-600">€{month.olivierExpenses.toFixed(2)}</td>
+                                                                            <td className={`p-3 text-right font-semibold ${month.olivierSavings >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                                                                €{month.olivierSavings.toFixed(2)}
+                                                                            </td>
+                                                                            <td className="p-3 text-right">{month.olivierRatio.toFixed(1)}%</td>
+                                                                        </tr>
+                                                                    ))}
+                                                                </tbody>
+                                                            </table>
+                                                        </div>
+                                                    </div>
+                                                ) : null}
                                             </div>
-                                            <div className="text-purple-100 text-sm">
-                                                {analysisData.length === 1 ? 'Maand' : 'Maanden'} Data
-                                            </div>
-                                        </div>
+                                        )}
                                     </div>
 
                                     {/* Manual Sync Button */}
@@ -1098,45 +1332,8 @@
                                         </div>
                                     )}
 
-                                    {/* Analysis Data Display */}
-                                    {analysisData.length > 0 ? (
-                                        <div className="bg-white p-6 rounded-xl shadow-lg text-center">
-                                            <div className="text-4xl mb-4">📊</div>
-                                            <h3 className="text-xl font-bold text-gray-600 mb-4">Maandelijkse Data Overzicht</h3>
-                                            
-                                            <div className="mt-8">
-                                                <h4 className="text-lg font-semibold mb-4">Maandelijkse Data</h4>
-                                                <div className="overflow-x-auto">
-                                                    <table className="w-full text-sm">
-                                                        <thead className="bg-gray-50">
-                                                            <tr>
-                                                                <th className="text-left p-3 font-semibold">Maand</th>
-                                                                <th className="text-right p-3 font-semibold">Sandrine</th>
-                                                                <th className="text-right p-3 font-semibold">Olivier</th>
-                                                                <th className="text-right p-3 font-semibold">Totaal</th>
-                                                                <th className="text-right p-3 font-semibold">Uitgaven</th>
-                                                                <th className="text-right p-3 font-semibold">Bespaard</th>
-                                                            </tr>
-                                                        </thead>
-                                                        <tbody>
-                                                            {analysisData.slice().reverse().map((month, index) => (
-                                                                <tr key={month.monthKey} className={index % 2 === 0 ? 'bg-gray-50/50' : ''}>
-                                                                    <td className="p-3 font-medium">{month.fullMonth}</td>
-                                                                    <td className="p-3 text-right">€{month.sandrineIncome.toFixed(2)}</td>
-                                                                    <td className="p-3 text-right">€{month.olivierIncome.toFixed(2)}</td>
-                                                                    <td className="p-3 text-right font-semibold">€{month.totalIncome.toFixed(2)}</td>
-                                                                    <td className="p-3 text-right text-red-600">€{month.totalExpenses.toFixed(2)}</td>
-                                                                    <td className={`p-3 text-right font-semibold ${month.savings >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                                                        €{month.savings.toFixed(2)}
-                                                                    </td>
-                                                                </tr>
-                                                            ))}
-                                                        </tbody>
-                                                    </table>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    ) : (
+                                    {/* No Data Message */}
+                                    {analysisData.length === 0 && (
                                         <div className="text-center py-16 bg-white rounded-xl shadow-lg">
                                             <div className="text-6xl mb-4">📊</div>
                                             <h3 className="text-2xl font-bold text-gray-600 mb-4">Nog geen data om te analyseren</h3>
