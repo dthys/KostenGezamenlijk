@@ -58,6 +58,14 @@
             padding: 12px 16px;
             margin-bottom: 16px;
         }
+
+        .info-banner {
+            background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+            border: 1px solid #7dd3fc;
+            border-radius: 8px;
+            padding: 12px 16px;
+            margin-bottom: 16px;
+        }
     </style>
 </head>
 <body>
@@ -92,6 +100,7 @@
             const [googleTokenClient, setGoogleTokenClient] = useState(null);
             const [syncError, setSyncError] = useState(null);
             const [isSyncing, setIsSyncing] = useState(false);
+            const [copiedFromPrevious, setCopiedFromPrevious] = useState(false);
 
             // Initialize libraries with better error handling
             useEffect(() => {
@@ -418,6 +427,18 @@
                 return `${selectedDate.year}-${selectedDate.month.toString().padStart(2, '0')}`;
             }, [selectedDate]);
 
+            const getPreviousMonthKey = useCallback(() => {
+                let prevMonth = selectedDate.month - 1;
+                let prevYear = selectedDate.year;
+                
+                if (prevMonth < 0) {
+                    prevMonth = 11;
+                    prevYear -= 1;
+                }
+                
+                return `${prevYear}-${prevMonth.toString().padStart(2, '0')}`;
+            }, [selectedDate]);
+
             const getCurrentMonthData = useCallback(() => {
                 const monthKey = getCurrentMonthKey();
                 return monthlyData[monthKey] || {
@@ -439,6 +460,42 @@
                     }
                 }));
             }, [getCurrentMonthKey, getCurrentMonthData]);
+
+            // Copy expenses from previous month if current month has no expenses
+            const copyExpensesFromPreviousMonth = useCallback(() => {
+                const currentMonthKey = getCurrentMonthKey();
+                const previousMonthKey = getPreviousMonthKey();
+                
+                const currentMonthData = monthlyData[currentMonthKey];
+                const previousMonthData = monthlyData[previousMonthKey];
+                
+                // Only copy if current month has no expenses and previous month has expenses
+                if ((!currentMonthData || currentMonthData.expenses.length === 0) && 
+                    previousMonthData && previousMonthData.expenses.length > 0) {
+                    
+                    const copiedExpenses = previousMonthData.expenses.map(expense => ({
+                        ...expense,
+                        id: Date.now() + Math.random() // Generate new IDs
+                    }));
+                    
+                    const currentData = getCurrentMonthData();
+                    updateCurrentMonthData({
+                        expenses: copiedExpenses
+                    });
+                    
+                    setCopiedFromPrevious(true);
+                    setTimeout(() => setCopiedFromPrevious(false), 5000); // Hide message after 5 seconds
+                    
+                    console.log(`Copied ${copiedExpenses.length} expenses from previous month`);
+                }
+            }, [getCurrentMonthKey, getPreviousMonthKey, monthlyData, getCurrentMonthData, updateCurrentMonthData]);
+
+            // Auto-copy expenses when month changes or data is loaded
+            useEffect(() => {
+                if (Object.keys(monthlyData).length > 0) {
+                    copyExpensesFromPreviousMonth();
+                }
+            }, [selectedDate, monthlyData, copyExpensesFromPreviousMonth]);
 
             const navigateMonth = useCallback((direction) => {
                 setSelectedDate(prev => {
@@ -670,6 +727,22 @@
                                 </div>
                             )}
 
+                            {/* Copy from Previous Month Notification */}
+                            {copiedFromPrevious && (
+                                <div className="info-banner">
+                                    <div className="flex items-center gap-2">
+                                        <div className="text-blue-600 text-xl">📋</div>
+                                        <div>
+                                            <div className="font-medium text-blue-800">Uitgaven gekopieerd</div>
+                                            <div className="text-sm text-blue-600">
+                                                De uitgaven van de vorige maand zijn automatisch gekopieerd. 
+                                                Je kunt deze naar belieben aanpassen of verwijderen.
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
                             {activeTab === 'budget' ? (
                                 <>
                                     {/* Month Navigation */}
@@ -815,6 +888,38 @@
                                             + Uitgave Toevoegen
                                         </button>
                                     </div>
+
+                                    {/* Manual Copy Button */}
+                                    {(() => {
+                                        const currentMonthKey = getCurrentMonthKey();
+                                        const previousMonthKey = getPreviousMonthKey();
+                                        const currentMonthData = monthlyData[currentMonthKey];
+                                        const previousMonthData = monthlyData[previousMonthKey];
+                                        const hasCurrentExpenses = currentMonthData && currentMonthData.expenses.length > 0;
+                                        const hasPreviousExpenses = previousMonthData && previousMonthData.expenses.length > 0;
+                                        
+                                        if (hasPreviousExpenses && hasCurrentExpenses) {
+                                            return (
+                                                <div className="mb-8 p-4 bg-blue-50 rounded-lg">
+                                                    <div className="flex items-center justify-between">
+                                                        <div>
+                                                            <div className="font-medium text-blue-800">Uitgaven van vorige maand</div>
+                                                            <div className="text-sm text-blue-600">
+                                                                Je kunt de uitgaven van {getMonthName((selectedDate.month - 1 + 12) % 12)} opnieuw kopiëren als je dat wilt.
+                                                            </div>
+                                                        </div>
+                                                        <button
+                                                            onClick={copyExpensesFromPreviousMonth}
+                                                            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
+                                                        >
+                                                            📋 Kopieer opnieuw
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            );
+                                        }
+                                        return null;
+                                    })()}
 
                                     {/* Expenses List */}
                                     <div className="mb-8">
